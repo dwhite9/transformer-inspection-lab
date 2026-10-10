@@ -892,6 +892,7 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 <li><code>intermediate.dense</code> (768 → 3072) then <code>output.dense</code> (3072 → 768): the MLP, expanding, applying GELU, then contracting.</li>
 <li><code>LayerNorm</code> modules: keep activations well-scaled.</li>
 </ul>
+<p>The config printout may list <code>&quot;dtype&quot;: &quot;float16&quot;</code>. That records how the checkpoint is <em>stored</em>. After <code>.float()</code> the weights in memory are float32, which is what the dtype check in Step 1 prints.</p>
 <p>Notice there is <strong>no head</strong> on <code>base</code>. It ends with the encoder layers, so its output is a set of vectors, not predictions.</p>
 <h2>Record</h2>
 <ol start="4">
@@ -1175,7 +1176,7 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 </blockquote>
 <p><strong>Objective:</strong> capture the output of any internal module during a forward pass. Think of it as an oscilloscope probe.</p>
 <h2>Concepts</h2>
-<p>A <strong>forward hook</strong> is a function with the signature <code>hook(module, inputs, output)</code>. You attach it with <code>module.register_forward_hook(hook)</code>. Every time that module runs, PyTorch calls your function. <code>inputs</code> is always a <strong>tuple</strong> of the positional arguments the module received; <code>output</code> is whatever the module returned. <code>register_forward_hook</code> returns a <strong>handle</strong>; calling <code>handle.remove()</code> detaches the hook. Always remove hooks when finished, or they keep firing on every later run.</p>
+<p>A <strong>forward hook</strong> is a function with the signature <code>hook(module, inputs, output)</code>. You attach it with <code>module.register_forward_hook(hook)</code>. Every time that module runs, PyTorch calls your function, and a module can run <strong>more than once</strong> in a single forward pass (Step 2 shows a real case). <code>inputs</code> is always a <strong>tuple</strong> of the positional arguments the module received; <code>output</code> is whatever the module returned. <code>register_forward_hook</code> returns a <strong>handle</strong>; calling <code>handle.remove()</code> detaches the hook. Always remove hooks when finished, or they keep firing on every later run.</p>
 <p><strong>Closure.</strong> A function defined inside another function that remembers the outer function's variables. Here <code>probe(&quot;L6_query&quot;)</code> returns a hook that remembers the key <code>&quot;L6_query&quot;</code>, so each hook stores its result under its own name.</p>
 <h3>Projections and mixing (used in Steps 4 to 6)</h3>
 <p>A <strong>projection</strong> is a linear layer: each output number is a weighted sum of <em>all</em> the input numbers, plus a bias. A tiny example with 3 numbers in and 2 out (these numbers are invented for teaching):</p>
@@ -1191,7 +1192,13 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 <span class="k">def</span><span class="w"> </span><span class="nf">probe</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
     <span class="c1"># probe() builds and returns a hook function that remembers `key`.</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">hook</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-        <span class="n">acts</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">output</span>         <span class="c1"># store the module's output under the chosen name</span>
+        <span class="c1"># Keep EVERY call, in order: a module can run more than once per forward pass.</span>
+        <span class="c1"># setdefault(key, []) returns the list stored under key, creating an empty one first</span>
+        <span class="c1"># if there is none. Long form:</span>
+        <span class="c1">#     if key not in acts:</span>
+        <span class="c1">#         acts[key] = []</span>
+        <span class="c1">#     acts[key].append(output)</span>
+        <span class="n">acts</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">hook</span>
 </code></pre>
 
@@ -1211,12 +1218,20 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 <span class="c1">#         h.remove()</span>
 <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">handles</span><span class="p">:</span> <span class="n">h</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>       <span class="c1"># always remove hooks</span>
 
-<span class="nb">print</span><span class="p">(</span><span class="n">acts</span><span class="p">[</span><span class="s2">"L6_mlp_expand"</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>   <span class="c1"># expect (1, T, 3072)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">acts</span><span class="p">[</span><span class="s2">"L6_query"</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>        <span class="c1"># expect (1, T, 768)</span>
+<span class="c1"># How many times did each module run, and what shape did each call return?</span>
+<span class="c1"># [tuple(o.shape) for o in outs] is a list comprehension. Long form:</span>
+<span class="c1">#     shapes = []</span>
+<span class="c1">#     for o in outs:</span>
+<span class="c1">#         shapes.append(tuple(o.shape))</span>
+<span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">outs</span> <span class="ow">in</span> <span class="n">acts</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">outs</span><span class="p">),</span> <span class="s2">"call(s):"</span><span class="p">,</span> <span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">o</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">outs</span><span class="p">])</span>
+<span class="c1"># expect (attention runs before the MLP, so the query hook is listed first):</span>
+<span class="c1">#         L6_query      2 call(s): [(1, T, 768), (1, 512, 768)]</span>
+<span class="c1">#         L6_mlp_expand 1 call(s): [(1, T, 3072)]</span>
 </code></pre>
 
 <p><strong>Step 3 (optional): split the queries into heads yourself.</strong></p>
-<pre class="hl" data-lang="python"><code><span class="n">q</span> <span class="o">=</span> <span class="n">acts</span><span class="p">[</span><span class="s2">"L6_query"</span><span class="p">]</span>                       <span class="c1"># (1, T, 768)</span>
+<pre class="hl" data-lang="python"><code><span class="n">q</span> <span class="o">=</span> <span class="n">acts</span><span class="p">[</span><span class="s2">"L6_query"</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>                    <span class="c1"># the FIRST call: the tokens' queries, (1, T, 768)</span>
 <span class="n">T</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>                             <span class="c1"># number of tokens</span>
 <span class="c1"># view reshapes without copying: split the 768 numbers into 12 groups of 64.</span>
 <span class="c1"># transpose(1, 2) swaps the token and head dimensions so heads come first.</span>
@@ -1280,8 +1295,9 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 
 <h2>Reading the output</h2>
 <ul>
-<li><code>(1, T, 3072)</code>: inside the MLP, each token's vector is temporarily 4× wider (768 → 3072).</li>
-<li><code>(1, T, 768)</code> for the queries. The model internally splits this into 12 heads of 64 dimensions. The &quot;heads&quot; are just slices of this one projection.</li>
+<li><code>(1, T, 3072)</code>: inside the MLP, each token's vector is temporarily 4× wider (768 → 3072). The MLP runs once per forward pass, so there is one call.</li>
+<li><strong><code>query_proj</code> runs twice.</strong> The first call is <code>(1, T, 768)</code>: the queries for your T tokens. The second is <code>(1, 512, 768)</code>: DeBERTa also passes its <strong>relative-position embeddings</strong> (one vector per relative distance, 2 × 256 position buckets = 512 rows) through the <em>same</em> query projection, which is how it scores &quot;content against position&quot; (the config's <code>share_att_key: true</code>). A hook that kept only the last call would show the position embeddings by mistake. That is why Step 1 stores a list.</li>
+<li>The tokens' queries, <code>(1, T, 768)</code>, are split internally into 12 heads of 64 dimensions. The &quot;heads&quot; are just slices of this one projection.</li>
 <li>Hooks are how interpretability research, probing, and activation capture are done in practice.</li>
 <li><strong>Step 4:</strong> the projection really is <code>x @ W.T + b</code> with nothing hidden. Each output number is row <em>k</em> of <code>W</code> matched against the token's 768 numbers, plus a bias. <code>W</code> has shape <code>(768, 768)</code>.</li>
 <li><strong>Step 5:</strong> head 2's 64 numbers use only 64 of the 768 rows of <code>W</code>. Every row still takes all 768 input numbers, so each head sees the whole token through its own 64 recipes.</li>
@@ -1486,6 +1502,8 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">vec</span> <span class="ow">in</span> <span class="p">[(</span><span class="s2">"as returned"</span><span class="p">,</span> <span class="n">last_h</span><span class="p">),</span> <span class="p">(</span><span class="s2">"after final norm"</span><span class="p">,</span> <span class="n">dec</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">last_h</span><span class="p">))]:</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">dec</span><span class="o">.</span><span class="n">lm_head</span><span class="p">(</span><span class="n">vec</span><span class="p">),</span> <span class="n">real</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">))</span>
 <span class="c1"># At least one line should print True. The LM head is just one Linear layer.</span>
+<span class="c1"># (With transformers 5.x, "as returned" is the one that prints True: hidden_states[-1]</span>
+<span class="c1"># already includes the final norm.)</span>
 </code></pre>
 
 <p><strong>Step 5: the label-token trick (a 3-way classifier with no new layer).</strong></p>
@@ -1710,10 +1728,18 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 <p><strong>Step 4: layer-wise linear probe.</strong></p>
 <pre class="hl" data-lang="python"><code><span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.linear_model</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogisticRegression</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.model_selection</span><span class="w"> </span><span class="kn">import</span> <span class="n">cross_val_score</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_pipeline</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.preprocessing</span><span class="w"> </span><span class="kn">import</span> <span class="n">StandardScaler</span>
+
+<span class="c1"># StandardScaler rescales each of the 768 features to mean 0 and standard deviation 1</span>
+<span class="c1"># (learned on the training folds only). Without it, a few huge "outlier" features in the</span>
+<span class="c1"># top layers dominate the classifier (see Reading the output).</span>
+<span class="c1"># make_pipeline(A, B) means "apply A, then B" as one model.</span>
+<span class="n">probe</span> <span class="o">=</span> <span class="n">make_pipeline</span><span class="p">(</span><span class="n">StandardScaler</span><span class="p">(),</span> <span class="n">LogisticRegression</span><span class="p">(</span><span class="n">max_iter</span><span class="o">=</span><span class="mi">2000</span><span class="p">))</span>
 
 <span class="k">for</span> <span class="n">L</span><span class="p">,</span> <span class="n">X</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">per_layer</span><span class="p">):</span>                     <span class="c1"># L = layer number, X = its (15, 768) array</span>
     <span class="c1"># cv=5: five-fold cross-validation → five accuracy numbers → .mean() averages them</span>
-    <span class="n">acc</span> <span class="o">=</span> <span class="n">cross_val_score</span><span class="p">(</span><span class="n">LogisticRegression</span><span class="p">(</span><span class="n">max_iter</span><span class="o">=</span><span class="mi">2000</span><span class="p">),</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">cv</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+    <span class="n">acc</span> <span class="o">=</span> <span class="n">cross_val_score</span><span class="p">(</span><span class="n">probe</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">cv</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"layer </span><span class="si">{</span><span class="n">L</span><span class="si">:</span><span class="s2">2d</span><span class="si">}</span><span class="s2">  probe accuracy </span><span class="si">{</span><span class="n">acc</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </code></pre>
 
@@ -1723,8 +1749,10 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 <ul>
 <li><strong>Base model:</strong> some loose grouping by topic, but priority classes overlap. Pretraining never cared about priority.</li>
 <li><strong>Fine-tuned model:</strong> three tighter, separable clusters in the last layer. This is &quot;fine-tuning tilts the space toward your loss&quot;, made visible.</li>
-<li><strong>Probe curve:</strong> accuracy is usually low at layer 0 and rises through the middle layers. The layer where it climbs is where the network builds the information that predicts priority.</li>
-<li>Try <code>pool=&quot;cls&quot;</code> against <code>pool=&quot;mean&quot;</code>. On base DeBERTa-v3, mean pooling often separates better, because <code>[CLS]</code> only becomes a good summary through fine-tuning.</li>
+<li><strong>Probe curve, with the toy data:</strong> read it loosely. With 15 tickets, each fold tests only 3 of them, so accuracy moves in coarse steps and changes noticeably with small differences. In one run (mean pooling, with the scaler) it was 0.80 at layer 0, peaked at 1.00 at layer 4, and fell to 0.53 at layer 12. Layer 0 is already well above chance (0.33) because single words such as &quot;failing&quot;, &quot;down&quot; or &quot;loss&quot; are clues even with no context.</li>
+<li><strong>Why the scaler matters.</strong> In the top layers a few features become huge: in one run the largest value at layer 12 was about 15, while a typical feature varied by only about 0.15. These are the same shared &quot;outlier&quot; directions behind the anisotropy you measured in Lab 5. Without standardising, the probe in that run fell to 0.27 at layer 12 (below chance); with it, 0.53. Try removing <code>StandardScaler()</code> to see the difference.</li>
+<li><strong>With real data</strong> (a few hundred labelled tickets), the curve is far more reliable. The layer where accuracy climbs is where the network builds the information that predicts priority, which for models like this is often reported to be in the middle layers.</li>
+<li>Try <code>pool=&quot;cls&quot;</code> against <code>pool=&quot;mean&quot;</code>. On base DeBERTa-v3, mean pooling separates better: in one run CLS pooling scored between 0.33 and 0.67, well below mean pooling. <code>[CLS]</code> only becomes a good summary through fine-tuning.</li>
 </ul>
 <h2>Record</h2>
 <ol start="22">
@@ -1943,7 +1971,7 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 <li>≈1.000 at layer 0, roughly 0.5 around layer 6, and roughly 0.9 at layer 12. It is a dip followed by a rebound, not a steady fall. Exact values vary with your sentences.</li>
 <li>The biggest drop is at the very start (layer 0 to layer 1, for example ≈1.00 to ≈0.74). The lowest point is in the middle layers (≈0.5 around layers 4 to 6). It does not keep falling: it climbs back to ≈0.9 by layer 12. The baseline in Step 3 shows most of that climb is just all vectors becoming more similar: in one run the different-word similarity rose from ≈0.12 to ≈0.76, and the same-word advantage over it shrank from ≈0.89 at layer 0 to ≈0.14 at layer 12.</li>
 <li>Varies. For example, one head attending mostly to <code>[SEP]</code> (an attention sink), another to the neighbouring tokens.</li>
-<li>Varies. Often &quot;failing&quot;, &quot;checkout&quot; or &quot;customers&quot;, alongside heavy weight on the special tokens.</li>
+<li>Varies, and the special tokens usually dominate. In one run <code>[CLS]</code> put 0.42 on itself and 0.29 on <code>[SEP]</code>, while content words got small shares (<code>▁Prod</code> 0.06, then <code>▁checkout</code>, <code>▁deploy</code>, <code>▁failing</code> at about 0.03 to 0.04 each).</li>
 <li><code>(1, 12, tokens, 64)</code>: batch, heads, tokens, head dimension.
 13a. <code>(768, 768)</code>, and row 5 (the sixth row, counting from 0). Query feature 5 is that row of <code>W</code> matched against the token's 768 numbers, plus <code>b[5]</code>.
 13b. All 768 change (the printout shows 768 for every token). With no mixing only 64 would change, the slots belonging to head 3.</li>
@@ -1951,13 +1979,13 @@ podman<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </sp
 <li>≈593k: pooler 768 × 768 + 768 = 590,592, plus classifier 3 × 768 + 3 = 2,307, total 592,899. Versus ≈184M for the backbone, so about 0.3%.</li>
 <li>The argmax does not change; the confidence does. Lower T sharpens the distribution and higher T flattens it, but the order never changes.</li>
 <li>≈896 hidden size, 24 layers, 14 query heads, 2 KV heads. Check your config.</li>
-<li>Varies. Something plausible like &quot; deploy&quot;, &quot; update&quot;, &quot; release&quot;.</li>
-<li>Varies. The point is that it produces a distribution over exactly three options with zero training.</li>
+<li>Varies. In one run: &quot; last&quot; (0.09), &quot; &quot; (0.06), &quot; update&quot; (0.05), &quot; latest&quot; (0.04), &quot; release&quot; (0.04). All plausible continuations.</li>
+<li>Varies. In one run: low 0.31, medium 0.25, high 0.44, so it already leaned towards &quot;high&quot; for the outage ticket. The point is that it produces a distribution over exactly three options with zero training.</li>
 <li><strong>≈1.04M trainable parameters, ≈0.56% of the total.</strong> Breakdown: LoRA matrices 36 adapters × 12,288 = 442,368, plus the trainable copies of <code>pooler</code> and <code>classifier</code> ≈ 592,899. The total shown by PEFT (≈185M) includes the frozen originals of those head layers as well as the trainable copies. (The short edition of this manual said &quot;roughly 1 to 2%&quot;; 0.56% is the figure these numbers give.)</li>
 <li>r × (768 + 768) = 8 × 1,536 = 12,288, versus 589,824 for the full matrix (≈2%).</li>
 <li>Base: overlapping. Fine-tuned: should be clearly separated. If not, investigate your training run.</li>
-<li>Depends on your data. Often the middle layers.</li>
-<li>Depends. On the base model mean pooling usually wins; after fine-tuning the gap tends to close.</li>
+<li>Depends on your data, and on the toy set it is noisy. In one run (mean pooling, with the scaler): 0.80 at layer 0, a peak of 1.00 at layer 4, and 0.53 at layer 12. With real data, the climb is often in the middle layers.</li>
+<li>On the base model mean pooling wins clearly (in one run CLS stayed between 0.33 and 0.67). After fine-tuning the gap tends to close.</li>
 <li><code>(15, 384)</code>: 15 tickets, 384 numbers each. Every row is divided by its own length in <code>F.normalize</code>, so each row has length exactly 1.</li>
 <li>Their cosine similarity. For unit-length vectors the formula <code>(a · b) / (‖a‖ ‖b‖)</code> reduces to <code>a · b</code>.</li>
 <li>In one run: &quot;Prod checkout failing for all customers&quot; (≈0.47), &quot;Payment processing returning 500 errors&quot; (≈0.42), &quot;Data loss when saving orders&quot; (≈0.39). They should be about checkout, payments and orders.</li>

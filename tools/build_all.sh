@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild both HTML guides from their markdown sources.
+# Rebuild everything generated from the markdown sources: both HTML guides and the lab notebook.
 # Each build script declares its own dependencies (PEP 723), so `uv run` needs no setup.
 
 # "Strict mode": stop on the first failed command (-e), on use of an unset variable (-u),
@@ -23,3 +23,4 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 uv run "$here/build_manual.py"
 uv run "$here/build_study_guide.py"
+uv run "$here/build_notebook.py"

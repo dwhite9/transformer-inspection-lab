@@ -550,6 +550,8 @@ In the printout of `layer[0]`, find:
 - `intermediate.dense` (768 → 3072) then `output.dense` (3072 → 768): the MLP, expanding, applying GELU, then contracting.
 - `LayerNorm` modules: keep activations well-scaled.
 
+The config printout may list `"dtype": "float16"`. That records how the checkpoint is *stored*. After `.float()` the weights in memory are float32, which is what the dtype check in Step 1 prints.
+
 Notice there is **no head** on `base`. It ends with the encoder layers, so its output is a set of vectors, not predictions.
 
 ## Record
@@ -902,7 +904,7 @@ for t, w in sorted(zip(toks, cls_focus.tolist()), key=lambda x: -x[1]):
 
 ## Concepts
 
-A **forward hook** is a function with the signature `hook(module, inputs, output)`. You attach it with `module.register_forward_hook(hook)`. Every time that module runs, PyTorch calls your function. `inputs` is always a **tuple** of the positional arguments the module received; `output` is whatever the module returned. `register_forward_hook` returns a **handle**; calling `handle.remove()` detaches the hook. Always remove hooks when finished, or they keep firing on every later run.
+A **forward hook** is a function with the signature `hook(module, inputs, output)`. You attach it with `module.register_forward_hook(hook)`. Every time that module runs, PyTorch calls your function, and a module can run **more than once** in a single forward pass (Step 2 shows a real case). `inputs` is always a **tuple** of the positional arguments the module received; `output` is whatever the module returned. `register_forward_hook` returns a **handle**; calling `handle.remove()` detaches the hook. Always remove hooks when finished, or they keep firing on every later run.
 
 **Closure.** A function defined inside another function that remembers the outer function's variables. Here `probe("L6_query")` returns a hook that remembers the key `"L6_query"`, so each hook stores its result under its own name.
 
@@ -951,7 +953,13 @@ acts = {}                          # an empty dict that will collect captured ou
 def probe(key):
     # probe() builds and returns a hook function that remembers `key`.
     def hook(module, inputs, output):
-        acts[key] = output         # store the module's output under the chosen name
+        # Keep EVERY call, in order: a module can run more than once per forward pass.
+        # setdefault(key, []) returns the list stored under key, creating an empty one first
+        # if there is none. Long form:
+        #     if key not in acts:
+        #         acts[key] = []
+        #     acts[key].append(output)
+        acts.setdefault(key, []).append(output)
     return hook
 ```
 
@@ -973,14 +981,22 @@ base(**enc)                        # one forward pass; the hooks fire during it
 #         h.remove()
 for h in handles: h.remove()       # always remove hooks
 
-print(acts["L6_mlp_expand"].shape)   # expect (1, T, 3072)
-print(acts["L6_query"].shape)        # expect (1, T, 768)
+# How many times did each module run, and what shape did each call return?
+# [tuple(o.shape) for o in outs] is a list comprehension. Long form:
+#     shapes = []
+#     for o in outs:
+#         shapes.append(tuple(o.shape))
+for key, outs in acts.items():
+    print(key, len(outs), "call(s):", [tuple(o.shape) for o in outs])
+# expect (attention runs before the MLP, so the query hook is listed first):
+#         L6_query      2 call(s): [(1, T, 768), (1, 512, 768)]
+#         L6_mlp_expand 1 call(s): [(1, T, 3072)]
 ```
 
 **Step 3 (optional): split the queries into heads yourself.**
 
 ```python
-q = acts["L6_query"]                       # (1, T, 768)
+q = acts["L6_query"][0]                    # the FIRST call: the tokens' queries, (1, T, 768)
 T = q.shape[1]                             # number of tokens
 # view reshapes without copying: split the 768 numbers into 12 groups of 64.
 # transpose(1, 2) swaps the token and head dimensions so heads come first.
@@ -1050,8 +1066,9 @@ print(changed)                                # expect 768 for every token
 
 ## Reading the output
 
-- `(1, T, 3072)`: inside the MLP, each token's vector is temporarily 4× wider (768 → 3072).
-- `(1, T, 768)` for the queries. The model internally splits this into 12 heads of 64 dimensions. The "heads" are just slices of this one projection.
+- `(1, T, 3072)`: inside the MLP, each token's vector is temporarily 4× wider (768 → 3072). The MLP runs once per forward pass, so there is one call.
+- **`query_proj` runs twice.** The first call is `(1, T, 768)`: the queries for your T tokens. The second is `(1, 512, 768)`: DeBERTa also passes its **relative-position embeddings** (one vector per relative distance, 2 × 256 position buckets = 512 rows) through the *same* query projection, which is how it scores "content against position" (the config's `share_att_key: true`). A hook that kept only the last call would show the position embeddings by mistake. That is why Step 1 stores a list.
+- The tokens' queries, `(1, T, 768)`, are split internally into 12 heads of 64 dimensions. The "heads" are just slices of this one projection.
 - Hooks are how interpretability research, probing, and activation capture are done in practice.
 - **Step 4:** the projection really is `x @ W.T + b` with nothing hidden. Each output number is row *k* of `W` matched against the token's 768 numbers, plus a bias. `W` has shape `(768, 768)`.
 - **Step 5:** head 2's 64 numbers use only 64 of the 768 rows of `W`. Every row still takes all 768 input numbers, so each head sees the whole token through its own 64 recipes.
@@ -1286,6 +1303,8 @@ real   = dout.logits[0, -1]                # what the model reported, (vocab_siz
 for label, vec in [("as returned", last_h), ("after final norm", dec.model.norm(last_h))]:
     print(label, torch.allclose(dec.lm_head(vec), real, atol=1e-3))
 # At least one line should print True. The LM head is just one Linear layer.
+# (With transformers 5.x, "as returned" is the one that prints True: hidden_states[-1]
+# already includes the final norm.)
 ```
 
 **Step 5: the label-token trick (a 3-way classifier with no new layer).**
@@ -1543,10 +1562,18 @@ plt.legend(); plt.title("last layer, mean-pooled, BASE model"); plt.show()
 ```python
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+# StandardScaler rescales each of the 768 features to mean 0 and standard deviation 1
+# (learned on the training folds only). Without it, a few huge "outlier" features in the
+# top layers dominate the classifier (see Reading the output).
+# make_pipeline(A, B) means "apply A, then B" as one model.
+probe = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000))
 
 for L, X in enumerate(per_layer):                     # L = layer number, X = its (15, 768) array
     # cv=5: five-fold cross-validation → five accuracy numbers → .mean() averages them
-    acc = cross_val_score(LogisticRegression(max_iter=2000), X, y, cv=5).mean()
+    acc = cross_val_score(probe, X, y, cv=5).mean()
     print(f"layer {L:2d}  probe accuracy {acc:.2f}")
 ```
 
@@ -1558,8 +1585,10 @@ Load its encoder (for a PEFT model, call `merge_and_unload()` first to fold the 
 
 - **Base model:** some loose grouping by topic, but priority classes overlap. Pretraining never cared about priority.
 - **Fine-tuned model:** three tighter, separable clusters in the last layer. This is "fine-tuning tilts the space toward your loss", made visible.
-- **Probe curve:** accuracy is usually low at layer 0 and rises through the middle layers. The layer where it climbs is where the network builds the information that predicts priority.
-- Try `pool="cls"` against `pool="mean"`. On base DeBERTa-v3, mean pooling often separates better, because `[CLS]` only becomes a good summary through fine-tuning.
+- **Probe curve, with the toy data:** read it loosely. With 15 tickets, each fold tests only 3 of them, so accuracy moves in coarse steps and changes noticeably with small differences. In one run (mean pooling, with the scaler) it was 0.80 at layer 0, peaked at 1.00 at layer 4, and fell to 0.53 at layer 12. Layer 0 is already well above chance (0.33) because single words such as "failing", "down" or "loss" are clues even with no context.
+- **Why the scaler matters.** In the top layers a few features become huge: in one run the largest value at layer 12 was about 15, while a typical feature varied by only about 0.15. These are the same shared "outlier" directions behind the anisotropy you measured in Lab 5. Without standardising, the probe in that run fell to 0.27 at layer 12 (below chance); with it, 0.53. Try removing `StandardScaler()` to see the difference.
+- **With real data** (a few hundred labelled tickets), the curve is far more reliable. The layer where accuracy climbs is where the network builds the information that predicts priority, which for models like this is often reported to be in the middle layers.
+- Try `pool="cls"` against `pool="mean"`. On base DeBERTa-v3, mean pooling separates better: in one run CLS pooling scored between 0.33 and 0.67, well below mean pooling. `[CLS]` only becomes a good summary through fine-tuning.
 
 ## Record
 
@@ -1764,7 +1793,7 @@ Exact numbers depend on library versions, so approximate values are marked ≈. 
 9. ≈1.000 at layer 0, roughly 0.5 around layer 6, and roughly 0.9 at layer 12. It is a dip followed by a rebound, not a steady fall. Exact values vary with your sentences.
 10. The biggest drop is at the very start (layer 0 to layer 1, for example ≈1.00 to ≈0.74). The lowest point is in the middle layers (≈0.5 around layers 4 to 6). It does not keep falling: it climbs back to ≈0.9 by layer 12. The baseline in Step 3 shows most of that climb is just all vectors becoming more similar: in one run the different-word similarity rose from ≈0.12 to ≈0.76, and the same-word advantage over it shrank from ≈0.89 at layer 0 to ≈0.14 at layer 12.
 11. Varies. For example, one head attending mostly to `[SEP]` (an attention sink), another to the neighbouring tokens.
-12. Varies. Often "failing", "checkout" or "customers", alongside heavy weight on the special tokens.
+12. Varies, and the special tokens usually dominate. In one run `[CLS]` put 0.42 on itself and 0.29 on `[SEP]`, while content words got small shares (`▁Prod` 0.06, then `▁checkout`, `▁deploy`, `▁failing` at about 0.03 to 0.04 each).
 13. `(1, 12, tokens, 64)`: batch, heads, tokens, head dimension.
 13a. `(768, 768)`, and row 5 (the sixth row, counting from 0). Query feature 5 is that row of `W` matched against the token's 768 numbers, plus `b[5]`.
 13b. All 768 change (the printout shows 768 for every token). With no mixing only 64 would change, the slots belonging to head 3.
@@ -1772,13 +1801,13 @@ Exact numbers depend on library versions, so approximate values are marked ≈. 
 15. ≈593k: pooler 768 × 768 + 768 = 590,592, plus classifier 3 × 768 + 3 = 2,307, total 592,899. Versus ≈184M for the backbone, so about 0.3%.
 16. The argmax does not change; the confidence does. Lower T sharpens the distribution and higher T flattens it, but the order never changes.
 17. ≈896 hidden size, 24 layers, 14 query heads, 2 KV heads. Check your config.
-18. Varies. Something plausible like " deploy", " update", " release".
-19. Varies. The point is that it produces a distribution over exactly three options with zero training.
+18. Varies. In one run: " last" (0.09), " " (0.06), " update" (0.05), " latest" (0.04), " release" (0.04). All plausible continuations.
+19. Varies. In one run: low 0.31, medium 0.25, high 0.44, so it already leaned towards "high" for the outage ticket. The point is that it produces a distribution over exactly three options with zero training.
 20. **≈1.04M trainable parameters, ≈0.56% of the total.** Breakdown: LoRA matrices 36 adapters × 12,288 = 442,368, plus the trainable copies of `pooler` and `classifier` ≈ 592,899. The total shown by PEFT (≈185M) includes the frozen originals of those head layers as well as the trainable copies. (The short edition of this manual said "roughly 1 to 2%"; 0.56% is the figure these numbers give.)
 21. r × (768 + 768) = 8 × 1,536 = 12,288, versus 589,824 for the full matrix (≈2%).
 22. Base: overlapping. Fine-tuned: should be clearly separated. If not, investigate your training run.
-23. Depends on your data. Often the middle layers.
-24. Depends. On the base model mean pooling usually wins; after fine-tuning the gap tends to close.
+23. Depends on your data, and on the toy set it is noisy. In one run (mean pooling, with the scaler): 0.80 at layer 0, a peak of 1.00 at layer 4, and 0.53 at layer 12. With real data, the climb is often in the middle layers.
+24. On the base model mean pooling wins clearly (in one run CLS stayed between 0.33 and 0.67). After fine-tuning the gap tends to close.
 25. `(15, 384)`: 15 tickets, 384 numbers each. Every row is divided by its own length in `F.normalize`, so each row has length exactly 1.
 26. Their cosine similarity. For unit-length vectors the formula `(a · b) / (‖a‖ ‖b‖)` reduces to `a · b`.
 27. In one run: "Prod checkout failing for all customers" (≈0.47), "Payment processing returning 500 errors" (≈0.42), "Data loss when saving orders" (≈0.39). They should be about checkout, payments and orders.
