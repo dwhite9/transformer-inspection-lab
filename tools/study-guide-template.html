@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Linear Algebra for AI: Study Guide</title>
+<style>
+:root {
+  --bg: #fbfbf9; --surface: #ffffff; --surface-2: #f2f2ee; --text: #1d1f23; --muted: #5d6270;
+  --border: #dcdcd4; --accent: #2457c5; --accent-soft: #e6edfb; --mark: #fff3c4;
+  --code-bg: #f4f4f0; --code-text: #24272e;
+  --t-comment: #7a7f8a; --t-keyword: #a626a4; --t-string: #3b7d2f; --t-number: #b3541e;
+  --t-builtin: #0b6fa8; --t-func: #2457c5; --t-op: #5d6270;
+  --shadow: 0 8px 28px rgba(20, 24, 40, .18);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161a; --surface: #1c1f26; --surface-2: #232730; --text: #e6e6e3; --muted: #9aa0ad;
+    --border: #2f3441; --accent: #8db0ff; --accent-soft: #232c45; --mark: #4a4222;
+    --code-bg: #191c22; --code-text: #dfe1e6;
+    --t-comment: #7d8494; --t-keyword: #d68cf0; --t-string: #8ccf7e; --t-number: #f0a16b;
+    --t-builtin: #6cc4f2; --t-func: #8db0ff; --t-op: #9aa0ad;
+    --shadow: 0 8px 28px rgba(0, 0, 0, .55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161a; --surface: #1c1f26; --surface-2: #232730; --text: #e6e6e3; --muted: #9aa0ad;
+  --border: #2f3441; --accent: #8db0ff; --accent-soft: #232c45; --mark: #4a4222;
+  --code-bg: #191c22; --code-text: #dfe1e6;
+  --t-comment: #7d8494; --t-keyword: #d68cf0; --t-string: #8ccf7e; --t-number: #f0a16b;
+  --t-builtin: #6cc4f2; --t-func: #8db0ff; --t-op: #9aa0ad;
+  --shadow: 0 8px 28px rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+
+/* three colours used to tell attention heads apart in diagrams */
+:root { --h1: #2457c5; --h2: #c76a12; --h3: #2a8a52; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --h1: #7aa2ff; --h2: #f0a45a; --h3: #5fcf8a; } }
+:root[data-theme="dark"] { --h1: #7aa2ff; --h2: #f0a45a; --h3: #5fcf8a; }
+.dg-h1 { fill: var(--h1); } .dg-h2 { fill: var(--h2); } .dg-h3 { fill: var(--h3); }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 1.25rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ---------- layout ---------- */
+.layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 100vh; }
+nav#sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 1.25rem 1rem 2rem;
+  border-right: 1px solid var(--border); background: var(--surface);
+}
+nav#sidebar h2 { font-size: 1rem; margin: 0 0 .25rem; }
+nav#sidebar .sub { color: var(--muted); font-size: .8rem; margin: 0 0 1rem; }
+nav#sidebar ol { list-style: none; margin: 1rem 0 0; padding: 0; }
+nav#sidebar li a {
+  display: block; padding: .3rem .6rem; border-radius: 6px; color: var(--text);
+  text-decoration: none; font-size: .88rem; line-height: 1.35;
+}
+nav#sidebar li a:hover { background: var(--surface-2); }
+nav#sidebar li a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.controls { display: grid; gap: .5rem; font-size: .84rem; }
+.controls label { display: flex; gap: .5rem; align-items: flex-start; cursor: pointer; color: var(--muted); }
+.controls button, .menu-btn {
+  font: inherit; font-size: .84rem; padding: .35rem .7rem; border-radius: 6px; cursor: pointer;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+}
+.controls button:hover, .menu-btn:hover { border-color: var(--accent); }
+.menu-btn { display: none; position: fixed; top: .6rem; left: .6rem; z-index: 30; }
+
+main#content { padding: 2.5rem clamp(16px, 4vw, 3.5rem) 6rem; max-width: 62rem; width: 100%; }
+
+/* ---------- prose ---------- */
+h1 { font-size: 1.85rem; line-height: 1.25; margin: 3.2rem 0 1rem; padding-top: .5rem; }
+main > h1:first-child { margin-top: 0; font-size: 2.1rem; }
+h2 { font-size: 1.3rem; margin: 2.2rem 0 .6rem; }
+h3 { font-size: 1.1rem; margin: 1.6rem 0 .4rem; }
+p, ul, ol { margin: .8rem 0; }
+li { margin: .25rem 0; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0 0; }
+a { color: var(--accent); }
+strong { font-weight: 650; }
+:not(pre) > code {
+  font: .88em/1 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg); padding: .12em .38em; border-radius: 4px; border: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- tables ---------- */
+.table-wrap { overflow-x: auto; margin: 1rem 0; border: 1px solid var(--border); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-weight: 650; }
+tr:last-child td { border-bottom: 0; }
+
+/* ---------- code ---------- */
+pre.hl {
+  position: relative; margin: 1rem 0; padding: 2rem 1rem 1rem; overflow-x: auto;
+  background: var(--code-bg); color: var(--code-text); border: 1px solid var(--border);
+  border-radius: 8px; font: 13.5px/1.55 ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+pre.hl::before {
+  content: attr(data-lang); position: absolute; top: .45rem; left: .9rem;
+  font: 600 .68rem/1 system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+}
+pre.hl code { font: inherit; white-space: pre; }
+pre.hl .copy {
+  position: absolute; top: .35rem; right: .45rem; font: inherit; font-size: .72rem;
+  padding: .2rem .55rem; border-radius: 5px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted); cursor: pointer;
+}
+pre.hl .copy:hover { color: var(--accent); border-color: var(--accent); }
+.c, .c1, .cm, .cs, .ch, .cp, .cpf { color: var(--t-comment); font-style: italic; }
+.k, .kn, .kd, .kc, .kr, .kp, .kt, .ow { color: var(--t-keyword); }
+.s, .s1, .s2, .sa, .sb, .sc, .sd, .se, .sh, .si, .sx, .sr, .ss, .fm { color: var(--t-string); }
+.m, .mi, .mf, .mh, .mo, .mb, .il { color: var(--t-number); }
+.nb, .bp, .nc, .ne { color: var(--t-builtin); }
+.nf, .nd { color: var(--t-func); }
+.o { color: var(--t-op); }
+
+/* ---------- glossary ---------- */
+.gl-entry {
+  margin: .6rem 0; padding: .1rem 1rem; border-left: 3px solid var(--border); border-radius: 0 6px 6px 0;
+}
+.gl-entry p { margin: .5rem 0; }
+.gl-entry:target { border-left-color: var(--accent); background: var(--accent-soft); }
+.gl-entry pre.hl { margin: .5rem 0; }
+.gl-term { color: var(--accent); }
+.gl-filter { margin: 1rem 0; }
+.gl-filter input {
+  width: 100%; font: inherit; padding: .55rem .8rem; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+}
+.gl-filter input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gl-filter small { color: var(--muted); }
+.gl-entry.hidden, h2.hidden { display: none; }
+
+/* ---------- diagrams ---------- */
+figure.diagram {
+  margin: 1.2rem 0; padding: 1rem .5rem; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px;
+}
+figure.diagram svg { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; }
+.dg-cell { fill: var(--surface); stroke: var(--muted); stroke-width: 1.3; }
+.dg-back { fill: var(--surface-2); opacity: .8; }
+.dg-hi { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.dg-title { fill: var(--text); font: 700 17px system-ui, sans-serif; }
+.dg-sub { fill: var(--muted); font: 14px system-ui, sans-serif; }
+.dg-shape { fill: var(--text); font: 700 17px ui-monospace, Menlo, Consolas, monospace; }
+.dg-num { fill: var(--text); font: 600 16px system-ui, sans-serif; text-anchor: middle; }
+.dg-axl { fill: var(--accent); font: 600 12.5px system-ui, sans-serif; }
+.dg-axis { stroke: var(--accent); stroke-width: 1.6; }
+.dg-arrowhead { fill: var(--accent); }
+.dg-brace { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+.dg-outline { fill: none; stroke: var(--accent); stroke-width: 3; }
+.dg-box { fill: var(--surface); stroke: var(--muted); stroke-width: 1.4; }
+.dg-llm { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.dg-boxt { fill: var(--text); font: 700 14px system-ui, sans-serif; }
+.dg-dash { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.dg-heatnum { font: 600 14px system-ui, sans-serif; }
+.dg-note { fill: var(--text); font: 14px system-ui, sans-serif; white-space: pre; }
+figure.diagram svg.wide { max-width: 760px; }
+
+
+/* ---------- study-guide additions: symbols, matrices, equations ---------- */
+var.var { font-style: normal; font-family: "Cambria Math", "STIX Two Math", Cambria, Georgia, serif; font-size: 1.05em; padding: 0 .06em; }
+var.var-it { font-style: italic; }
+var.var sup { font-size: .7em; }
+.eq {
+  margin: 1rem 0; padding: .8rem 1rem; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; text-align: center; font: 1.12rem/2.2 "Cambria Math", "STIX Two Math", Cambria, Georgia, serif;
+  overflow-x: auto;
+}
+.eq .lbl { display: block; font: .78rem/1.3 system-ui, sans-serif; color: var(--muted); text-align: left; margin-bottom: .2rem; }
+.mx {
+  display: inline-grid; grid-template-columns: repeat(var(--cols), auto); gap: .1rem .75rem; vertical-align: middle;
+  padding: .15rem .5rem; margin: .15rem .2rem; border-left: 2px solid var(--text); border-right: 2px solid var(--text);
+  border-radius: 0; text-align: center; line-height: 1.5; font-family: "Cambria Math", Cambria, Georgia, serif;
+  font-variant-numeric: tabular-nums; position: relative;
+}
+.mx::before, .mx::after { content: ""; position: absolute; top: 0; bottom: 0; width: 5px; border: 2px solid var(--text); }
+.mx::before { left: -2px; border-right: 0; } .mx::after { right: -2px; border-left: 0; }
+.mx > span { min-width: 1.1em; }
+.recipe { border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0; padding: .2rem 1rem; background: var(--surface); margin: 1rem 0; }
+.recipe > p:first-child { font-weight: 650; color: var(--accent); margin-bottom: .2rem; }
+.why { border-left: 4px solid var(--h2); padding: .2rem 1rem; background: var(--surface-2); border-radius: 0 8px 8px 0; margin: 1rem 0; }
+.why > p:first-child::before { content: "Why it is used: "; font-weight: 650; color: var(--h2); }
+details.practice { margin: 1rem 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+details.practice > summary { cursor: pointer; padding: .55rem 1rem; font-weight: 650; color: var(--accent); }
+details.practice > summary:hover { background: var(--surface-2); }
+details.practice[open] > summary { border-bottom: 1px solid var(--border); }
+details.practice > div { padding: .2rem 1rem .6rem; }
+.problem { border: 1px solid var(--border); border-radius: 10px; padding: .4rem 1.1rem .6rem; margin: 1.2rem 0; background: var(--surface-2); }
+.problem > p:first-child { font-weight: 650; }
+
+/* ---------- diagrams: extra classes ---------- */
+.dg-grid { stroke: var(--border); stroke-width: 1; }
+.dg-vec { stroke: var(--h1); stroke-width: 3; }
+.dg-vec2 { stroke: var(--h2); stroke-width: 3; }
+.dg-arrowhead2 { fill: var(--h2); }
+.dg-dot { fill: var(--h1); }
+.dg-cell.dg-c1 { fill: color-mix(in srgb, var(--h1) 16%, var(--surface)); stroke: var(--h1); }
+.dg-cell.dg-c2 { fill: color-mix(in srgb, var(--h2) 16%, var(--surface)); stroke: var(--h2); }
+.dg-c1r { fill: color-mix(in srgb, var(--h1) 35%, var(--surface)); stroke: var(--h1); stroke-width: 1.5; }
+.dg-c2r { fill: color-mix(in srgb, var(--h2) 35%, var(--surface)); stroke: var(--h2); stroke-width: 1.5; }
+.dg-area { fill: color-mix(in srgb, var(--h3) 22%, transparent); stroke: var(--h3); stroke-width: 1.6; }
+.dg-back { stroke: var(--h2); stroke-width: 1.8; stroke-dasharray: 6 4; }
+.dg-back-t { fill: var(--h2); font: 600 13.5px system-ui, sans-serif; }
+
+/* ---------- interactive widgets ---------- */
+.widget { margin: 1.4rem 0; padding: 1rem 1.1rem 1.1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.widget h4 { margin: 0 0 .2rem; font-size: 1rem; }
+.widget .hint { color: var(--muted); font-size: .85rem; margin: 0 0 .8rem; }
+.widget .row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin: .6rem 0; }
+.widget .wmx { display: inline-grid; gap: 4px; padding: 4px 8px; border-left: 2px solid var(--text); border-right: 2px solid var(--text); }
+.widget input[type=number] {
+  width: 3.6rem; font: inherit; font-size: .95rem; text-align: center; padding: .25rem; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+}
+.widget input[type=number]:focus { outline: 2px solid var(--accent); }
+.widget .cellbtn {
+  min-width: 3.6rem; font: inherit; padding: .25rem .4rem; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-variant-numeric: tabular-nums;
+}
+.widget .on { background: var(--accent-soft) !important; outline: 2px solid var(--accent); }
+.widget .on2 { background: color-mix(in srgb, var(--h2) 20%, var(--surface-2)) !important; outline: 2px solid var(--h2); }
+.widget .out { font: .95rem/1.6 ui-monospace, Menlo, Consolas, monospace; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem; overflow-x: auto; white-space: pre-wrap; }
+.widget .op { font-size: 1.3rem; color: var(--muted); }
+.widget button.preset { font: inherit; font-size: .82rem; padding: .3rem .6rem; border-radius: 6px; cursor: pointer; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.widget button.preset:hover { border-color: var(--accent); }
+.widget label.sl { display: grid; grid-template-columns: 2.2rem 1fr 3rem; align-items: center; gap: .5rem; font-size: .9rem; min-width: 13rem; flex: 1 1 40%; }
+.widget label.sl input { width: 100%; accent-color: var(--accent); }
+.widget svg { width: 100%; height: auto; display: block; max-width: 420px; margin: .4rem auto; touch-action: none; }
+.widget .bars { display: grid; gap: .35rem; margin: .6rem 0; }
+.widget .bar { display: grid; grid-template-columns: 6.5rem 1fr 4rem; gap: .6rem; align-items: center; font-size: .9rem; }
+.widget .bar .track { height: 18px; background: var(--surface-2); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+.widget .bar .fill { height: 100%; background: var(--accent); transition: width .15s; }
+.widget .stat { display: inline-block; padding: .2rem .6rem; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); font-size: .9rem; margin: .15rem .3rem .15rem 0; }
+.widget .warn { color: var(--h2); font-weight: 600; }
+
+/* ---------- tooltip triggers ---------- */
+.term {
+  text-decoration: underline dotted var(--accent); text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px; cursor: help; border-radius: 3px;
+}
+.term:hover, .term:focus-visible, .term.open { background: var(--accent-soft); outline: none; }
+body.no-terms .term { text-decoration: none; background: none; cursor: auto; }
+
+#tip {
+  position: fixed; z-index: 100; max-width: min(26rem, calc(100vw - 24px));
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-top: 3px solid var(--accent); border-radius: 8px; box-shadow: var(--shadow);
+  padding: .7rem .95rem .75rem; font-size: .9rem; line-height: 1.5;
+  opacity: 0; visibility: hidden; transition: opacity .12s;
+}
+#tip.show { opacity: 1; visibility: visible; }
+#tip .tip-title { font-weight: 700; color: var(--accent); margin-bottom: .2rem; }
+#tip p { margin: .35rem 0; }
+#tip pre.hl { margin: .4rem 0; padding: .6rem .7rem; font-size: 12px; }
+#tip pre.hl::before, #tip pre.hl .copy { display: none; }
+#tip .tip-link { display: inline-block; margin-top: .25rem; font-size: .8rem; }
+
+/* ---------- small screens ---------- */
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  nav#sidebar {
+    position: fixed; z-index: 20; inset: 0 auto 0 0; width: min(300px, 86vw); transform: translateX(-102%);
+    transition: transform .2s; box-shadow: var(--shadow);
+  }
+  body.nav-open nav#sidebar { transform: none; }
+  .menu-btn { display: block; }
+  main#content { padding-top: 3.5rem; }
+}
+</style>
+</head>
+<body>
+<button class="menu-btn" id="menuBtn" aria-label="Toggle contents">☰ Contents</button>
+<div class="layout">
+  <nav id="sidebar" aria-label="Table of contents">
+    <h2>Linear Algebra for AI</h2>
+    <p class="sub">Hover, focus or tap any <span class="term" tabindex="0" data-demo="1">dotted-underline term</span> or italic symbol such as <var class="term var var-it" tabindex="0" data-id="var-W">W</var> to see its definition.</p>
+    <div class="controls">
+      <label><input type="checkbox" id="allOcc"> Underline every occurrence (default: first in each section)</label>
+      <label><input type="checkbox" id="termsOn" checked> Tooltips on</label>
+      <button id="themeBtn" type="button">Toggle light / dark</button>
+    </div>
+    <ol id="toc"></ol>
+  </nav>
+  <main id="content">
+__CONTENT__
+  </main>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script id="glossary-data" type="application/json">__GLOSSARY__</script>
+<script>
+(function () {
+  "use strict";
+
+  // ---------- small helpers ----------
+  function store(key, val) { try { if (val === undefined) return localStorage.getItem(key); localStorage.setItem(key, val); } catch (e) {} return null; }
+  var slug = function (s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); };
+  var main = document.getElementById("content");
+  var GLOSS = JSON.parse(document.getElementById("glossary-data").textContent);
+  var byId = {};
+  GLOSS.forEach(function (e) { byId[e.id] = e; });
+
+  // ---------- headings, table of contents, scroll spy ----------
+  var h1s = Array.prototype.slice.call(main.querySelectorAll("h1"));
+  var toc = document.getElementById("toc");
+  h1s.forEach(function (h, i) {
+    h.id = slug(h.textContent) || "section-" + i;
+    if (i === 0) return;                      // first h1 is the page title
+    var li = document.createElement("li"), a = document.createElement("a");
+    a.href = "#" + h.id; a.textContent = h.textContent;
+    li.appendChild(a); toc.appendChild(li);
+  });
+  var links = toc.querySelectorAll("a");
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle("active", a.getAttribute("href") === "#" + en.target.id); });
+      });
+    }, { rootMargin: "0px 0px -75% 0px" });
+    h1s.slice(1).forEach(function (h) { io.observe(h); });
+  }
+  document.getElementById("menuBtn").addEventListener("click", function () { document.body.classList.toggle("nav-open"); });
+  toc.addEventListener("click", function () { document.body.classList.remove("nav-open"); });
+
+  // Contents list in the intro -> real links (and mark it so tooltips skip it).
+  var contentsH2 = Array.prototype.find.call(main.querySelectorAll("h2"), function (h) { return h.textContent.trim() === "Contents"; });
+  if (contentsH2 && contentsH2.nextElementSibling && contentsH2.nextElementSibling.tagName === "UL") {
+    var ul = contentsH2.nextElementSibling; ul.classList.add("toc-list");
+    ul.querySelectorAll("li").forEach(function (li) {
+      var t = li.textContent.trim();
+      var target = h1s.find(function (h) { return h.textContent.trim() === t; });
+      if (target) { li.innerHTML = '<a href="#' + target.id + '">' + li.innerHTML + "</a>"; }
+    });
+  }
+
+  // ---------- theme ----------
+  var root = document.documentElement;
+  var savedTheme = store("la-theme"); if (savedTheme) root.setAttribute("data-theme", savedTheme);
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") === "dark" ||
+      (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+    var next = dark ? "light" : "dark"; root.setAttribute("data-theme", next); store("la-theme", next);
+  });
+
+  // ---------- copy buttons ----------
+  main.querySelectorAll("pre.hl").forEach(function (pre) {
+    var b = document.createElement("button"); b.className = "copy"; b.type = "button"; b.textContent = "Copy";
+    b.addEventListener("click", function () {
+      var text = pre.querySelector("code").textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
+        b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy"; }, 1200);
+      }, function () { b.textContent = "Press Ctrl+C"; setTimeout(function () { b.textContent = "Copy"; }, 1500); });
+    });
+    pre.appendChild(b);
+  });
+
+  // ---------- glossary filter box ----------
+  var glH1 = h1s.find(function (h) { return /^Part 0: Glossary/.test(h.textContent); });
+  if (glH1) {
+    var box = document.createElement("div"); box.className = "gl-filter";
+    box.innerHTML = '<input type="search" id="glq" placeholder="Filter the glossary (e.g. transpose, Jacobian, σ)…" aria-label="Filter glossary"> <small id="glcount"></small>';
+    glH1.insertAdjacentElement("afterend", box);
+    var entries = main.querySelectorAll(".gl-entry");
+    document.getElementById("glq").addEventListener("input", function (ev) {
+      var q = ev.target.value.trim().toLowerCase(), n = 0;
+      entries.forEach(function (en) {
+        var hit = !q || en.textContent.toLowerCase().indexOf(q) !== -1;
+        en.classList.toggle("hidden", !hit); if (hit) n++;
+      });
+      main.querySelectorAll(".gl-entry").forEach(function () {});
+      document.getElementById("glcount").textContent = q ? n + " of " + entries.length + " entries" : "";
+    });
+  }
+
+  // ---------- term matching ----------
+  var keyMap = new Map();
+  GLOSS.forEach(function (e) { e.keys.forEach(function (k) { keyMap.set(k.toLowerCase().replace(/\s+/g, " "), e); }); });
+  var keys = Array.from(keyMap.keys()).sort(function (a, b) { return b.length - a.length; });
+  var esc = function (s) { return s.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&").replace(/ /g, "\\s+"); };
+  var RE = new RegExp("(?<![\\w-])(" + keys.map(esc).join("|") + ")(?:e?s)?(?![\\w-])", "gi");
+
+  function lookup(text) {
+    var n = text.toLowerCase().replace(/\s+/g, " ");
+    return keyMap.get(n) || keyMap.get(n.replace(/s$/, "")) || keyMap.get(n.replace(/es$/, "")) || null;
+  }
+  var SKIP = "code, pre, svg, h1, h2, h3, h4, a, .term, .gl-term, .toc-list, .gl-filter, button, script, style, .widget, .mx, summary";
+
+  function decorate(container, seen, selfId, all) {
+    var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        return n.parentElement.closest(SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function (node) {
+      var text = node.nodeValue, last = 0, frag = null, m;
+      RE.lastIndex = 0;
+      while ((m = RE.exec(text))) {
+        var e = lookup(m[0]);
+        if (!e || e.id === selfId || (!all && seen.has(e.id))) continue;
+        seen.add(e.id);
+        frag = frag || document.createDocumentFragment();
+        frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        var span = document.createElement("span");
+        span.className = "term"; span.tabIndex = 0; span.dataset.id = e.id; span.textContent = m[0];
+        frag.appendChild(span); last = m.index + m[0].length;
+      }
+      if (frag) { frag.appendChild(document.createTextNode(text.slice(last))); node.parentNode.replaceChild(frag, node); }
+    });
+  }
+
+  function undecorate() {
+    main.querySelectorAll(".term:not(.var)").forEach(function (s) { s.replaceWith(document.createTextNode(s.textContent)); });
+    main.normalize();
+  }
+
+  function decorateAll() {
+    undecorate();
+    var all = document.getElementById("allOcc").checked, seen = new Set();
+    Array.prototype.forEach.call(main.children, function (child) {
+      if (child.tagName === "H1") seen = new Set();               // new section: reset
+      if (child.classList.contains("gl-entry")) {                  // glossary: per entry, skip itself
+        decorate(child, new Set(), child.dataset.entry, all);
+      } else {
+        decorate(child, seen, null, all);
+      }
+    });
+  }
+
+  // ---------- tooltip ----------
+  var tip = document.getElementById("tip"), current = null, hideTimer = null;
+
+  function show(el) {
+    var e = byId[el.dataset.id]; if (!e) return;
+    clearTimeout(hideTimer);
+    if (current && current !== el) current.classList.remove("open");
+    current = el; el.classList.add("open");
+    var inGlossary = !!el.closest(".gl-entry");
+    tip.innerHTML = '<div class="tip-title">' + e.label + "</div>" + e.body +
+      (inGlossary ? "" : '<a class="tip-link" href="#gl-' + e.id + '">Jump to glossary entry →</a>');
+    tip.classList.add("show");
+    var r = el.getBoundingClientRect(), t = tip.getBoundingClientRect(), pad = 8;
+    var below = r.bottom + pad + t.height < innerHeight || r.top - pad - t.height < 0;
+    var top = below ? r.bottom + pad : r.top - pad - t.height;
+    var left = Math.min(Math.max(pad, r.left), innerWidth - t.width - pad);
+    tip.style.top = Math.max(pad, top) + "px"; tip.style.left = left + "px";
+  }
+  function hideSoon() { clearTimeout(hideTimer); hideTimer = setTimeout(hide, 180); }
+  function hide() {
+    tip.classList.remove("show"); if (current) current.classList.remove("open"); current = null;
+  }
+
+  document.addEventListener("mouseover", function (ev) {
+    if (!document.body.classList.contains("no-terms")) {
+      var el = ev.target.closest && ev.target.closest(".term[data-id]"); if (el) show(el);
+    }
+    if (ev.target.closest && ev.target.closest("#tip")) clearTimeout(hideTimer);
+  });
+  document.addEventListener("mouseout", function (ev) {
+    if (ev.target.closest && (ev.target.closest(".term") || ev.target.closest("#tip"))) hideSoon();
+  });
+  document.addEventListener("focusin", function (ev) {
+    var el = ev.target.closest && ev.target.closest(".term[data-id]");
+    if (el && !document.body.classList.contains("no-terms")) show(el);
+  });
+  document.addEventListener("focusout", function (ev) { if (ev.target.closest && ev.target.closest(".term")) hideSoon(); });
+  document.addEventListener("click", function (ev) {                // tap support
+    var el = ev.target.closest && ev.target.closest(".term[data-id]");
+    if (el) { show(el); return; }
+    if (!ev.target.closest("#tip")) hide();
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") hide(); });
+  addEventListener("scroll", hide, { passive: true });
+  tip.addEventListener("click", function (ev) { if (ev.target.closest(".tip-link")) hide(); });
+
+  // The sidebar demo term has no glossary id; give it a one-off definition.
+  var demo = document.querySelector(".term[data-demo]");
+  if (demo) { demo.dataset.id = "matrix"; }
+
+  // ---------- settings ----------
+  var allOcc = document.getElementById("allOcc"), termsOn = document.getElementById("termsOn");
+  allOcc.checked = store("la-all") === "1";
+  termsOn.checked = store("la-terms") !== "0";
+  document.body.classList.toggle("no-terms", !termsOn.checked);
+  allOcc.addEventListener("change", function () { store("la-all", allOcc.checked ? "1" : "0"); decorateAll(); });
+  termsOn.addEventListener("change", function () {
+    store("la-terms", termsOn.checked ? "1" : "0");
+    document.body.classList.toggle("no-terms", !termsOn.checked); hide();
+  });
+
+  decorateAll();
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  function el(tag, attrs, kids) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === "text") e.textContent = attrs[k]; else if (k === "html") e.innerHTML = attrs[k];
+      else if (k === "on") Object.keys(attrs.on).forEach(function (ev) { e.addEventListener(ev, attrs.on[ev]); });
+      else e.setAttribute(k, attrs[k]);
+    });
+    (kids || []).forEach(function (c) { if (c) e.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function f(v, d) {
+    d = d === undefined ? 3 : d;
+    var r = Math.round(v * Math.pow(10, d)) / Math.pow(10, d);
+    if (Object.is(r, -0) || r === 0) r = 0;
+    return String(r).replace("-", "−");
+  }
+  var NS = "http://www.w3.org/2000/svg";
+  function s(tag, attrs) { var e = document.createElementNS(NS, tag); Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); }); return e; }
+
+  // ------------------------------------------------------------ matmul explorer
+  function matmul(root) {
+    var A = [[1, 2, 3], [4, 5, 6]], B = [[7, 8], [9, 10], [11, 12]], swapped = false, sel = [0, 0];
+    root.appendChild(el("h4", { text: "Matrix multiplication explorer" }));
+    root.appendChild(el("p", { class: "hint", text: "Edit any number. Tap an entry of the result to see which row and column produce it. Swap the order to see that the shape (and the answer) changes." }));
+    var row = el("div", { class: "row" }), out = el("div", { class: "out" });
+    var swapBtn = el("button", { class: "preset", type: "button", text: "Swap order (B·A)" });
+    root.appendChild(row); root.appendChild(el("div", { class: "row" }, [swapBtn])); root.appendChild(out);
+    var L, R, inL, inR, cells;
+    function grid(M, store) {
+      var g = el("div", { class: "wmx", style: "grid-template-columns:repeat(" + M[0].length + ",auto)" });
+      M.forEach(function (r, i) {
+        r.forEach(function (v, j) {
+          var inp = el("input", { type: "number", step: "any", value: v, "aria-label": "row " + (i + 1) + " column " + (j + 1) });
+          inp.addEventListener("input", function () { var n = parseFloat(inp.value); M[i][j] = isNaN(n) ? 0 : n; update(); });
+          store.push({ i: i, j: j, e: inp }); g.appendChild(inp);
+        });
+      });
+      return g;
+    }
+    function build() {
+      L = swapped ? B : A; R = swapped ? A : B; inL = []; inR = []; cells = [];
+      row.innerHTML = "";
+      var m = L.length, p = R[0].length;
+      if (sel[0] >= m || sel[1] >= p) sel = [0, 0];
+      var C = el("div", { class: "wmx", style: "grid-template-columns:repeat(" + p + ",auto)" });
+      for (var i = 0; i < m; i++) for (var j = 0; j < p; j++) {
+        (function (i, j) {
+          var b = el("button", { class: "cellbtn", type: "button", on: { click: function () { sel = [i, j]; update(); } } });
+          cells.push({ i: i, j: j, e: b }); C.appendChild(b);
+        })(i, j);
+      }
+      var nL = swapped ? "B" : "A", nR = swapped ? "A" : "B";
+      row.appendChild(el("div", {}, [el("div", { class: "hint", text: nL + "  (" + L.length + " × " + L[0].length + ")" }), grid(L, inL)]));
+      row.appendChild(el("span", { class: "op", text: "·" }));
+      row.appendChild(el("div", {}, [el("div", { class: "hint", text: nR + "  (" + R.length + " × " + R[0].length + ")" }), grid(R, inR)]));
+      row.appendChild(el("span", { class: "op", text: "=" }));
+      row.appendChild(el("div", {}, [el("div", { class: "hint", text: nL + nR + "  (" + m + " × " + p + ")" }), C]));
+      swapBtn.textContent = swapped ? "Swap order back (A·B)" : "Swap order (B·A)";
+      update();
+    }
+    function update() {
+      var i0 = sel[0], j0 = sel[1], n = R.length;
+      cells.forEach(function (c) {
+        var v = 0; for (var k = 0; k < n; k++) v += L[c.i][k] * R[k][c.j];
+        c.e.textContent = f(v); c.e.classList.toggle("on", c.i === i0 && c.j === j0);
+      });
+      inL.forEach(function (c) { c.e.classList.toggle("on", c.i === i0); });
+      inR.forEach(function (c) { c.e.classList.toggle("on2", c.j === j0); });
+      var terms = [], tot = 0;
+      for (var k = 0; k < n; k++) { terms.push(f(L[i0][k]) + "×" + f(R[k][j0])); tot += L[i0][k] * R[k][j0]; }
+      out.textContent = "entry (" + (i0 + 1) + ", " + (j0 + 1) + ") = row " + (i0 + 1) + " (blue) · column " + (j0 + 1) +
+        " (orange)\n  = " + terms.join(" + ") + "\n  = " + f(tot) +
+        "\n\nShapes: (" + L.length + " × " + n + ") · (" + n + " × " + R[0].length + ") = (" + L.length + " × " + R[0].length + "). The inner sizes match, so the product exists.";
+    }
+    swapBtn.addEventListener("click", function () { swapped = !swapped; build(); });
+    build();
+  }
+
+  // ------------------------------------------------------- 2x2 transformation
+  function transform(root) {
+    var M = { a: 2, b: 1, c: 0, d: 1 };
+    root.appendChild(el("h4", { text: "2 × 2 transformation playground" }));
+    root.appendChild(el("p", { class: "hint", text: "The matrix [[a, b], [c, d]] moves every point of the plane. Blue arrow = column 1 = where [1, 0] lands. Orange = column 2 = where [0, 1] lands. Green = the image of the unit square. Dashed lines = eigenvector directions (when real)." }));
+    var svg = s("svg", { viewBox: "-210 -210 420 420", role: "img", "aria-label": "The plane after the transformation" });
+    root.appendChild(svg);
+    var sliders = el("div", { class: "row" }), stats = el("div", {}), presets = el("div", { class: "row" });
+    root.appendChild(sliders); root.appendChild(presets); root.appendChild(stats);
+    var ins = {};
+    ["a", "b", "c", "d"].forEach(function (k) {
+      var inp = el("input", { type: "range", min: "-2", max: "2", step: "0.1", value: M[k], "aria-label": k });
+      var val = el("span", { text: f(M[k], 1) });
+      inp.addEventListener("input", function () { M[k] = parseFloat(inp.value); val.textContent = f(M[k], 1); draw(); });
+      ins[k] = { inp: inp, val: val };
+      sliders.appendChild(el("label", { class: "sl" }, [el("b", { text: k }), inp, val]));
+    });
+    var P = [["identity", 1, 0, 0, 1], ["scale ×2", 2, 0, 0, 2], ["stretch x", 2, 0, 0, 1], ["rotate 90°", 0, -1, 1, 0],
+             ["shear", 1, 1, 0, 1], ["reflect", 1, 0, 0, -1], ["collapse (rank 1)", 1, 2, 0.5, 1], ["symmetric", 2, 1, 1, 2]];
+    P.forEach(function (pr) {
+      presets.appendChild(el("button", { class: "preset", type: "button", text: pr[0], on: { click: function () {
+        ["a", "b", "c", "d"].forEach(function (k, i) { M[k] = pr[i + 1]; ins[k].inp.value = M[k]; ins[k].val.textContent = f(M[k], 1); }); draw(); } } }));
+    });
+    var S = 50;
+    function pt(x, y) { return [(M.a * x + M.b * y) * S, -(M.c * x + M.d * y) * S]; }
+    function line(p1, p2, st, w, dash) { svg.appendChild(s("line", { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], stroke: st, "stroke-width": w, "stroke-dasharray": dash || "" })); }
+    function arrow(x, y, col) {
+      var p = pt(x, y); line([0, 0], p, col, 3);
+      var ang = Math.atan2(p[1], p[0]), L = 10;
+      if (Math.hypot(p[0], p[1]) > 1) svg.appendChild(s("polygon", { fill: col, points: [p, [p[0] - L * Math.cos(ang - 0.4), p[1] - L * Math.sin(ang - 0.4)], [p[0] - L * Math.cos(ang + 0.4), p[1] - L * Math.sin(ang + 0.4)]].map(function (q) { return q.join(","); }).join(" ") }));
+    }
+    function draw() {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      var cs = getComputedStyle(document.documentElement);
+      var grid = cs.getPropertyValue("--border").trim(), muted = cs.getPropertyValue("--muted").trim();
+      var h1 = cs.getPropertyValue("--h1").trim(), h2 = cs.getPropertyValue("--h2").trim(), h3 = cs.getPropertyValue("--h3").trim();
+      for (var i = -5; i <= 5; i++) { line([i * S, -210], [i * S, 210], grid, 1); line([-210, i * S], [210, i * S], grid, 1); }
+      for (var k = -8; k <= 8; k++) { line(pt(k, -8), pt(k, 8), muted, 0.7, "3 3"); line(pt(-8, k), pt(8, k), muted, 0.7, "3 3"); }
+      var sq = [pt(0, 0), pt(1, 0), pt(1, 1), pt(0, 1)];
+      svg.appendChild(s("polygon", { points: sq.map(function (q) { return q.join(","); }).join(" "), fill: h3, "fill-opacity": "0.22", stroke: h3, "stroke-width": "1.5" }));
+      var tr = M.a + M.d, det = M.a * M.d - M.b * M.c, disc = tr * tr - 4 * det, eig = "";
+      if (disc >= -1e-9) {
+        var r = Math.sqrt(Math.max(disc, 0)), ls = [(tr + r) / 2, (tr - r) / 2];
+        var seen = [];
+        ls.forEach(function (l) {
+          var v = Math.abs(M.b) > 1e-9 ? [M.b, l - M.a] : Math.abs(M.c) > 1e-9 ? [l - M.d, M.c] : null;
+          var vs = v ? [v] : [[1, 0], [0, 1]].filter(function (u) { return Math.abs(M.a * u[0] + M.b * u[1] - l * u[0]) < 1e-9 && Math.abs(M.c * u[0] + M.d * u[1] - l * u[1]) < 1e-9; });
+          vs.forEach(function (u) {
+            var n = Math.hypot(u[0], u[1]); if (n < 1e-9) return;
+            var key = (u[0] / n).toFixed(3) + "," + (u[1] / n).toFixed(3); if (seen.indexOf(key) >= 0) return; seen.push(key);
+            line([-u[0] / n * 300, u[1] / n * 300], [u[0] / n * 300, -u[1] / n * 300], h3, 1.5, "7 5");
+          });
+        });
+        eig = "eigenvalues λ = " + f(ls[0], 2) + " and " + f(ls[1], 2);
+      } else eig = "no real eigenvalues (the matrix rotates every direction)";
+      arrow(1, 0, h1); arrow(0, 1, h2);
+      var rank = Math.abs(det) > 1e-9 ? 2 : (Math.abs(M.a) + Math.abs(M.b) + Math.abs(M.c) + Math.abs(M.d) > 1e-9 ? 1 : 0);
+      stats.innerHTML = "";
+      [["M", "[[" + f(M.a, 1) + ", " + f(M.b, 1) + "], [" + f(M.c, 1) + ", " + f(M.d, 1) + "]]"],
+       ["det M = ad − bc", f(det, 2)], ["area scale", "×" + f(Math.abs(det), 2)], ["rank", rank], ["", eig]].forEach(function (p) {
+        stats.appendChild(el("span", { class: "stat", text: p[0] ? p[0] + " = " + p[1] : p[1] }));
+      });
+      if (det < -1e-9) stats.appendChild(el("span", { class: "stat warn", text: "det < 0: the plane is flipped (mirror image)" }));
+      if (rank < 2) stats.appendChild(el("span", { class: "stat warn", text: "det = 0: the plane is squashed onto a line, so M has no inverse" }));
+    }
+    draw();
+    var mo = new MutationObserver(draw); mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+
+  // ----------------------------------------------------------- dot product
+  function dot(root) {
+    var st = { ua: 20, ul: 3, wa: 70, wl: 2.5 };
+    root.appendChild(el("h4", { text: "Dot product and angle" }));
+    root.appendChild(el("p", { class: "hint", text: "Turn and stretch the two vectors. The dot product is positive when they point the same general way, zero at 90°, and negative when they point apart. The dashed line is the projection of w onto u." }));
+    var svg = s("svg", { viewBox: "-200 -200 400 400", role: "img", "aria-label": "Two vectors from the origin" });
+    root.appendChild(svg);
+    var sl = el("div", { class: "row" }), out = el("div", { class: "out" });
+    root.appendChild(sl); root.appendChild(out);
+    [["ua", "u°", 0, 360, 1], ["ul", "‖u‖", 0.5, 4, 0.1], ["wa", "w°", 0, 360, 1], ["wl", "‖w‖", 0.5, 4, 0.1]].forEach(function (c) {
+      var inp = el("input", { type: "range", min: c[2], max: c[3], step: c[4], value: st[c[0]], "aria-label": c[1] });
+      var v = el("span", { text: f(st[c[0]], 1) });
+      inp.addEventListener("input", function () { st[c[0]] = parseFloat(inp.value); v.textContent = f(st[c[0]], 1); draw(); });
+      sl.appendChild(el("label", { class: "sl" }, [el("b", { text: c[1] }), inp, v]));
+    });
+    var S = 45;
+    function draw() {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      var cs = getComputedStyle(document.documentElement);
+      var grid = cs.getPropertyValue("--border").trim(), h1 = cs.getPropertyValue("--h1").trim(), h2 = cs.getPropertyValue("--h2").trim(), h3 = cs.getPropertyValue("--h3").trim();
+      for (var i = -4; i <= 4; i++) {
+        svg.appendChild(s("line", { x1: i * S, y1: -200, x2: i * S, y2: 200, stroke: grid }));
+        svg.appendChild(s("line", { x1: -200, y1: i * S, x2: 200, y2: i * S, stroke: grid }));
+      }
+      var u = [st.ul * Math.cos(st.ua * Math.PI / 180), st.ul * Math.sin(st.ua * Math.PI / 180)];
+      var w = [st.wl * Math.cos(st.wa * Math.PI / 180), st.wl * Math.sin(st.wa * Math.PI / 180)];
+      var d = u[0] * w[0] + u[1] * w[1], nu = Math.hypot(u[0], u[1]), nw = Math.hypot(w[0], w[1]);
+      var cos = d / (nu * nw), th = Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI;
+      var pr = [u[0] * d / (nu * nu), u[1] * d / (nu * nu)];
+      svg.appendChild(s("line", { x1: -u[0] / nu * 300, y1: u[1] / nu * 300, x2: u[0] / nu * 300, y2: -u[1] / nu * 300, stroke: grid, "stroke-width": 1.5 }));
+      svg.appendChild(s("line", { x1: w[0] * S, y1: -w[1] * S, x2: pr[0] * S, y2: -pr[1] * S, stroke: h3, "stroke-dasharray": "5 4", "stroke-width": 1.5 }));
+      svg.appendChild(s("line", { x1: 0, y1: 0, x2: pr[0] * S, y2: -pr[1] * S, stroke: h3, "stroke-width": 5, "stroke-opacity": 0.5 }));
+      [[u, h1, "u"], [w, h2, "w"]].forEach(function (q) {
+        var p = [q[0][0] * S, -q[0][1] * S], ang = Math.atan2(p[1], p[0]), L = 11;
+        svg.appendChild(s("line", { x1: 0, y1: 0, x2: p[0], y2: p[1], stroke: q[1], "stroke-width": 3 }));
+        svg.appendChild(s("polygon", { fill: q[1], points: [p, [p[0] - L * Math.cos(ang - 0.4), p[1] - L * Math.sin(ang - 0.4)], [p[0] - L * Math.cos(ang + 0.4), p[1] - L * Math.sin(ang + 0.4)]].map(function (z) { return z.join(","); }).join(" ") }));
+        var t = s("text", { x: p[0] + 10 * Math.cos(ang), y: p[1] + 10 * Math.sin(ang) + 5, fill: q[1], "font-size": "16", "font-style": "italic", "text-anchor": "middle" }); t.textContent = q[2]; svg.appendChild(t);
+      });
+      var sign = Math.abs(d) < 0.05 ? "≈ 0: perpendicular (orthogonal)" : d > 0 ? "> 0: pointing the same general way" : "< 0: pointing apart";
+      out.textContent = "u = [" + f(u[0], 2) + ", " + f(u[1], 2) + "]    w = [" + f(w[0], 2) + ", " + f(w[1], 2) + "]\n" +
+        "u · w = " + f(u[0], 2) + "×" + f(w[0], 2) + " + " + f(u[1], 2) + "×" + f(w[1], 2) + " = " + f(d, 2) + "   " + sign + "\n" +
+        "‖u‖ ‖w‖ cos θ = " + f(nu, 2) + " × " + f(nw, 2) + " × " + f(cos, 3) + " = " + f(d, 2) + "   (same number)\n" +
+        "cosine similarity = " + f(cos, 3) + "    angle θ = " + f(th, 1) + "°";
+    }
+    draw();
+    new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+
+  // --------------------------------------------------------------- softmax
+  function softmax(root) {
+    var z = [2, 1, 0, -1], tau = 1;
+    root.appendChild(el("h4", { text: "Softmax with temperature" }));
+    root.appendChild(el("p", { class: "hint", text: "Edit the scores (logits) and move the temperature τ. Low τ sharpens toward the largest score; high τ flattens toward equal weights. The order never changes, and the weights always add to 1." }));
+    var row = el("div", { class: "row" }), bars = el("div", { class: "bars" }), out = el("div", { class: "out" });
+    var inps = z.map(function (v, i) {
+      var inp = el("input", { type: "number", step: "any", value: v, "aria-label": "score " + (i + 1) });
+      inp.addEventListener("input", function () { var n = parseFloat(inp.value); z[i] = isNaN(n) ? 0 : n; draw(); });
+      row.appendChild(el("label", {}, ["z" + "₁₂₃₄"[i] + " ", inp])); return inp;
+    });
+    var t = el("input", { type: "range", min: "0.1", max: "5", step: "0.1", value: tau, "aria-label": "temperature" }), tv = el("span", { text: "1" });
+    t.addEventListener("input", function () { tau = parseFloat(t.value); tv.textContent = f(tau, 1); draw(); });
+    root.appendChild(row); root.appendChild(el("div", { class: "row" }, [el("label", { class: "sl" }, [el("b", { text: "τ" }), t, tv])]));
+    root.appendChild(bars); root.appendChild(out);
+    function draw() {
+      var m = Math.max.apply(null, z), e = z.map(function (v) { return Math.exp((v - m) / tau); }), S = e.reduce(function (a, b) { return a + b; }, 0);
+      bars.innerHTML = "";
+      e.forEach(function (v, i) {
+        var p = v / S;
+        bars.appendChild(el("div", { class: "bar" }, [el("span", { text: "z" + "₁₂₃₄"[i] + " = " + f(z[i], 2) }),
+          el("div", { class: "track" }, [el("div", { class: "fill", style: "width:" + (p * 100).toFixed(1) + "%" })]), el("span", { text: f(p, 3) })]));
+      });
+      out.textContent = "1. divide by τ:       [" + z.map(function (v) { return f(v / tau, 2); }).join(", ") + "]\n" +
+        "2. subtract the max:  [" + z.map(function (v) { return f((v - m) / tau, 2); }).join(", ") + "]   (avoids overflow; same answer)\n" +
+        "3. exponentiate:      [" + e.map(function (v) { return f(v, 3); }).join(", ") + "]\n" +
+        "4. divide by the sum " + f(S, 3) + " → weights add to " + f(e.reduce(function (a, b) { return a + b / S; }, 0), 3);
+    }
+    draw();
+  }
+
+  var REG = { matmul: matmul, transform: transform, dot: dot, softmax: softmax };
+  document.querySelectorAll(".widget[data-widget]").forEach(function (w) {
+    var fn = REG[w.dataset.widget];
+    if (fn) fn(w); else w.textContent = "Unknown widget: " + w.dataset.widget;
+  });
+})();
+</script>
+</body>
+</html>
